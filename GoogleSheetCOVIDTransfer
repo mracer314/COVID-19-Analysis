@@ -1,0 +1,2 @@
+#!/bin/sh
+python /Users/admin/Documents/GitHub/"COVID-19 Analysis"/google_sheets_udpate.py wdir='/Users/admin/Documents/GitHub/COVID-19 Analysis/'
