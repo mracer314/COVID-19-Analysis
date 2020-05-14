@@ -40,3 +40,7 @@ Thumbs.db
 ##################
 *.JSON
 
+# Working Files #
+getWorldPopNumbers.py
+WPP2019_TotalPopulationBySex.csv
+
