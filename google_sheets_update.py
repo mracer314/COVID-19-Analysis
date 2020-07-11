@@ -114,6 +114,12 @@ def read_covid_data():
     file_deaths_global = 'time_series_covid19_deaths_global.csv'
     file_recovered_global = 'time_series_covid19_recovered_global.csv'
 
+
+    #Country ID path
+    gh_path_ID_csv = ('https://raw.githubusercontent.com/CSSEGISandData/' +
+                      'COVID-19/master/csse_covid_19_data/' +
+                      'UID_ISO_FIPS_LookUp_Table.csv')
+
     #Get the datasets from Github
     df_confirmed_us = pd.read_csv(gh_path_csv + file_confirmed_us)
     df_deaths_us = pd.read_csv(gh_path_csv + file_deaths_us)
@@ -145,6 +151,14 @@ def read_covid_data():
                                             'County'])['Population']
     df_county_pop = df_county_pop[df_county_pop >0]
 
+    #Get world population
+    df_global_pop = pd.read_csv(gh_path_ID_csv)
+    df_global_pop = df_global_pop.rename(columns={"Province_State":"Province/State",
+                                        'Country_Region': 'Country/Region',
+                                        'Long_': 'Long'})
+    df_global_pop = df_global_pop.set_index(['Country/Region',
+                                             'Province/State'])['Population']
+
     #Process US Cases data at the county level
     df_counties_cf = df_confirmed_us.set_index(['Province_State','County'])
     df_counties_dt = df_deaths_us.set_index(['Province_State','County'])
@@ -164,7 +178,8 @@ def read_covid_data():
               'County Cases':df_counties_cf,
               'County Deaths':df_counties_dt,
               'State Pop':df_states_pop,
-              'County Pop':df_county_pop}
+              'County Pop':df_county_pop,
+              'Global Pop':df_global_pop}
 
     return df_dict
 
@@ -256,8 +271,7 @@ def parse_data_for_sheet():
 
 def covid_data_summary():
     """Reads data from the Johns Hopkins github site and prints a summary of
-    the current data to the command line.
-
+    the current data to the command line
 
     Returns
     -------
@@ -265,12 +279,24 @@ def covid_data_summary():
 
     """
 
+    #List of San Francisco bay area counties
+    bay_area_counties = [('California','Santa Clara'),
+                         ('California','Alameda'),
+                         ('California','San Francisco'),
+                         ('California','San Mateo'),
+                         ('California','Contra Costa'),
+                         ('California','Solano'),
+                         ('California','Sonoma'),
+                         ('California','Marin'),
+                         ('California','Napa')]
+
     #Get data
     df_dict = read_covid_data()
     df_countries_cf = df_dict['Global Cases']
     df_countries_dt = df_dict['Global Deaths']
     df_countries_rc = df_dict['Global Recoveries']
     df_countries_cf = df_countries_cf.drop(columns='Cases WW')
+    df_countries_pop = df_dict['Global Pop']
 
 
     df_states_cf = df_dict['State Cases']
@@ -280,6 +306,11 @@ def covid_data_summary():
     df_counties_cf = df_dict['County Cases']
     df_counties_dt = df_dict['County Deaths']
     df_county_pop = df_dict['County Pop']
+
+    df_bayarea = df_counties_cf[bay_area_counties]
+    df_bayarea_7day = df_bayarea.iloc[-1,:]-df_bayarea.iloc[-7,:]
+    df_bayarea_pop = df_counties_cf[bay_area_counties].iloc[-1,:]/df_county_pop[bay_area_counties]*100
+    df_bayarea_deaths = df_counties_dt[bay_area_counties].iloc[-1,:]
 
     #Organize the data for display
     A = df_counties_cf.iloc[-1,:].sort_values(ascending=False)
@@ -295,27 +326,55 @@ def covid_data_summary():
     global_death_rates = df_countries_dt.iloc[-1,:]/df_countries_cf.iloc[-1,:]*100
     global_death_rates = global_death_rates.dropna().sort_values(ascending=False)
 
+    county_death_trend_by_pop = (df_counties_dt.iloc[-1,:] - df_counties_dt.iloc[-7,:])/df_county_pop*100
+    county_death_trend_by_pop = county_death_trend_by_pop.dropna().sort_values(ascending=False)
+    global_death_rates = df_countries_dt.iloc[-1,:]/df_countries_cf.iloc[-1,:]*100
+    global_death_rates = global_death_rates.dropna().sort_values(ascending=False)
+
+
+    #Bay Area Summary
+    print('##### Bay Area COVID-19 Summary #####')
+    print('Total Number of Cases')
+    print(df_bayarea.iloc[-1,:])
+    print('')
+    print('7 Day Case Trend')
+    print(df_bayarea_7day)
+    print('')
+    print('Total Infection by Pop %')
+    print(df_bayarea_pop)
+    print('')
+    print('Total Number of Bay Area Deaths')
+    print(df_bayarea_deaths)
+    print('')
+    print('')
+
     #Output the information to the command line
+    print('##### State Summary #####')
     print('The Top 5 Most infected Counties in New Jersey by pop%')
-    print(B['New Jersey'].head())
+    print(B['New Jersey'].apply(np.round,decimals=3).head())
     print('')
     print('The Top 5 Most infected Counties in California by pop%')
-    print(B['California'].head())
+    print(B['California'].apply(np.round,decimals=3).head())
     print('')
+    print('')
+    print('##### US County Summary #####')
     print('The Top 5 Most infected Counties in the US by pop%')
-    print(B.head())
+    print(B.apply(np.round,decimals=2).head())
     print('')
-    print('The Top 10 most infected counties in the US')
+    print('The Top 10 most infected Counties in the US')
     print(A.head(10))
     print('')
     print('The Top 10 Trending Counties in the US [7 day change]')
     print(C.head(10))
     print('')
     print('The Top 10 Trending Counties in the US by pop%')
-    print(D.head(10))
+    print(D.apply(np.round,decimals=3).head(10))
     print('')
-    print('The  Top 10 Trending County Death Rates By Pop% in US')
-    print(county_deaths_by_pop.head(10))
+    print('The  Top 10 County Death Totals By Pop% in US')
+    print(county_deaths_by_pop.apply(np.round,decimals=3).head(10))
+    print('')
+    print('The Top 10 Trending County Death Rates by Pop% in US')
+    print(county_death_trend_by_pop.apply(np.round,decimals=4).head(10))
 
 
     #Calculate the time time to complete infection
@@ -326,7 +385,7 @@ def covid_data_summary():
     print('')
     print('The Top 10 Trending Counties in the US in population infection rate')
     print('[number of days to reach 100% spread]')
-    print(timeToInfectAll.head(10))
+    print(timeToInfectAll.apply(np.round,decimals=0).astype('int32').head(10))
 
     #Find out the countries with the fasting moving spread globally
     ln_df_countries_cf = np.log(df_countries_cf).diff()
@@ -334,21 +393,81 @@ def covid_data_summary():
     ln_df_countries_cf = ln_df_countries_cf.transpose().sort_values(
         ascending=False)
     print('')
+    print('')
+    print('##### Global Summary #####')
     print('The Top 10 Trending Countries')
-    print(ln_df_countries_cf.head(10))
+    print(ln_df_countries_cf.apply(np.round,decimals=3).head(10))
 
     #Find out the countries with the fasting moving spread globally
     diff_countries_cf = df_countries_cf.reset_index(drop=True).diff().dropna()
     diff_countries_cf = diff_countries_cf.iloc[-1].sort_values(ascending=False)
     print('')
     print('The Top 10 Countries with Most Added Cases')
+    print(diff_countries_cf.apply(np.round,decimals=0).astype('int32').head(10))
+
+    #Find out which counrties have the highest average weekly rise
+    diff_countries_cf = df_countries_cf.reset_index(drop=True).diff().dropna()
+    diff_countries_cf = diff_countries_cf.iloc[-7:].sum(axis=0) / 7
+    diff_countries_cf = diff_countries_cf.sort_values(ascending=False)
+    diff_countries_cf = diff_countries_cf.apply(np.round,decimals=0).astype('int32')
+    print('')
+    print('The Top 10 Countries with the highest 7-Day average daily case rate')
     print(diff_countries_cf.head(10))
 
     #Find out which contries have the highest mortality rates.
     print('')
     print('The Top 10 Contries with highest death rates:')
-    print(global_death_rates.head(10))
+    print(global_death_rates.apply(np.round,decimals=1).head(10))
 
+    #US Summary
+    US_pop = df_county_pop.sum()
+    US_cases = df_counties_cf.iloc[-1,:].sum()
+    US_deaths = df_counties_dt.iloc[-1,:].sum()
+    US_daily_case_rate_7day = (df_counties_cf.iloc[-1,:].sum() - df_counties_cf.iloc[-7,:].sum())/7
+    US_daily_death_rate_7day = (df_counties_dt.iloc[-1,:].sum() - df_counties_dt.iloc[-7,:].sum())/7
+
+    print('')
+    print('### US COVID Summary ###')
+    print('Population: '+str(US_pop))
+    print('Total Cases: '+str(US_cases))
+    print('Total Deaths: '+str(US_deaths))
+    print('')
+    print('Death Rate by Pop%: '+str(round(US_deaths/US_pop*100,3))+'%')
+    print('Death Rate by Case:'+str(round(US_deaths/US_cases*100,3))+'%')
+    print('')
+    print('Daily Case Rate Over 7 Days: '+str(round(US_daily_case_rate_7day,0)))
+    print('Daily Death Rate Over 7 Days: '+str(round(US_daily_death_rate_7day,0)))
+
+    return
+
+
+def print_covid_summary(counties):
+    """Reads data from the Johns Hopkins github site and prints a summary of
+    the current data to the command line for the list of counties/provinces
+
+
+    Parameters
+    ----------
+    counties : List of 2 element tuples with the county and state/province to
+        summarize.
+
+    Returns
+    -------
+    None.
+
+    """
+
+    print('')
+    print('### US COVID Summary ###')
+    print('Population: '+str(US_pop))
+    print('Total Cases: '+str(US_cases))
+    print('Total Deaths: '+str(US_deaths))
+    print('')
+    print('Death Rate by Pop%: '+str(round(US_deaths/US_pop*100,3))+'%')
+    print('Death Rate by Case:'+str(round(US_deaths/US_cases*100,3))+'%')
+    print('')
+    print('Daily Case Rate Over 7 Days: '+str(round(US_daily_case_rate_7day,0)))
+    print('Daily Death Rate Over 7 Days: '+str(round(US_daily_death_rate_7day,0)))
 
     return
 
@@ -373,9 +492,9 @@ def plot_key_statistics(df,key,title_suffix,color='b',varTitle='Cases'):
 
     Parameters
     ----------
-    df : TYPE
+    df : Pandas DataFrame
         DESCRIPTION.
-    key : TYPE
+    key : String
         DESCRIPTION.
 
     Returns
@@ -409,11 +528,11 @@ def plot_worst_cases(df,varTitle='Cases',color='b'):
 
     Parameters
     ----------
-    df : TYPE
+    df : Pandas DataFrame
         DESCRIPTION.
-    key : TYPE
+    key : String
         DESCRIPTION.
-    title varTitle : TYPE, optional
+    title varTitle : String, optional
         DESCRIPTION. The default is 'Cases'.
 
     Returns
@@ -483,6 +602,12 @@ def run_daily_report():
     plot_key_statistics(df_counties_dt['2020-03-01':],
                         ('California','Santa Clara'),
                         'Santa Clara County, CA',color='r',varTitle='Deaths')
+
+    plot_key_statistics(df_counties_cf['2020-03-01':],('California','Alameda'),
+                            'Alameda County, CA')
+    plot_key_statistics(df_counties_dt['2020-03-01':],
+                        ('California','Alameda'),
+                        'Alameda County, CA',color='r',varTitle='Deaths')
 
     plot_key_statistics(df_counties_cf['2020-03-01':],('California','Los Angeles'),
                             'Los Angeles County, CA')
